@@ -1215,7 +1215,8 @@ async function closeTabOnly(tab, btn, siblingBtn, row) {
 // Lists every note in Trilium that carries its own #url or #webViewSrc label,
 // except Trilium's own system notes (ids starting "_", such as the built-in help).
 // Clicking a row opens the URL in Firefox; Delete removes the note from
-// Trilium. ETAPI's delete also takes any child whose only parent is that note,
+// Trilium, and Bookmark & delete first files the link under Firefox's Other
+// Bookmarks. ETAPI's delete also takes any child whose only parent is that note,
 // so a note with children is never deleted from here, and that is re-checked
 // against the server just before the delete is sent.
 // ---------------------------------------------------------------------------
@@ -1290,29 +1291,54 @@ function makeTriliumRow(note, url) {
   const actions = document.createElement("div")
   actions.className = "bm-actions"
 
+  const bookmarkBtn = document.createElement("button")
+  bookmarkBtn.className = "save-btn"
+  bookmarkBtn.textContent = "Bookmark & delete"
+
   const deleteBtn = document.createElement("button")
   deleteBtn.className = "delete-btn"
   deleteBtn.textContent = "Delete"
+
   if (note.childNoteIds.length > 0) {
+    bookmarkBtn.disabled = true
     deleteBtn.disabled = true
-    deleteBtn.title = "This note has child notes, so it can't be deleted from here"
+    bookmarkBtn.title = deleteBtn.title = CHILDREN_BLOCK_DELETE
   } else {
+    bookmarkBtn.title = "Bookmark this link in Firefox, then delete the note from Trilium"
     deleteBtn.title = "Delete this note from Trilium"
   }
-  deleteBtn.addEventListener("click", () => deleteTriliumNote(note, deleteBtn, row))
+  bookmarkBtn.addEventListener("click", () =>
+    deleteTriliumNote(note, url, bookmarkBtn, deleteBtn, row, { bookmark: true })
+  )
+  deleteBtn.addEventListener("click", () =>
+    deleteTriliumNote(note, url, deleteBtn, bookmarkBtn, row, { bookmark: false })
+  )
 
+  actions.appendChild(bookmarkBtn)
   actions.appendChild(deleteBtn)
   row.appendChild(link)
   row.appendChild(actions)
   return row
 }
 
-async function deleteTriliumNote(note, btn, row) {
+const CHILDREN_BLOCK_DELETE = "This note has child notes, so it can't be deleted from here"
+
+// With `bookmark`, the link is bookmarked in Firefox only once every check has
+// passed and the delete is confirmed.
+async function deleteTriliumNote(note, url, btn, siblingBtn, row, { bookmark }) {
   clearBanner()
   const label = note.title || note.noteId
   if (isSystemNote(note.noteId)) return
 
+  const idleText = btn.textContent
+  const restore = () => {
+    btn.disabled = false
+    siblingBtn.disabled = false
+    btn.textContent = idleText
+  }
+
   btn.disabled = true
+  siblingBtn.disabled = true
   btn.textContent = "Checking…"
 
   // Children may have been added since the list was drawn.
@@ -1320,14 +1346,13 @@ async function deleteTriliumNote(note, btn, row) {
   try {
     fresh = await client.getNote(note.noteId)
   } catch (err) {
-    btn.disabled = false
-    btn.textContent = "Delete"
+    restore()
     showBanner(`Couldn't check "${label}" before deleting: ${err.message}`, "err")
     return
   }
   if (fresh.childNoteIds.length > 0) {
-    btn.textContent = "Delete"
-    btn.title = "This note has child notes, so it can't be deleted from here"
+    btn.textContent = idleText
+    btn.title = siblingBtn.title = CHILDREN_BLOCK_DELETE
     showBanner(
       `Not deleted: "${label}" has ${fresh.childNoteIds.length} child ` +
       `note${fresh.childNoteIds.length === 1 ? "" : "s"}. Move or delete them in Trilium first.`,
@@ -1338,22 +1363,34 @@ async function deleteTriliumNote(note, btn, row) {
 
   const clones = fresh.parentNoteIds.length
   const ok = window.confirm(
-    `Delete the note "${label}" from Trilium?` +
+    (bookmark
+      ? `Bookmark "${label}" in Firefox, then delete the note from Trilium?`
+      : `Delete the note "${label}" from Trilium?`) +
     (clones > 1 ? `\n\nIt appears in ${clones} places in the tree; all of them will go.` : "")
   )
-  if (!ok) {
-    btn.disabled = false
-    btn.textContent = "Delete"
-    return
+  if (!ok) return restore()
+
+  if (bookmark) {
+    btn.textContent = "Bookmarking…"
+    try {
+      await browser.bookmarks.create({ title: note.title || url, url })
+    } catch (err) {
+      restore()
+      showBanner(`Failed to bookmark "${label}": ${err.message}. Nothing was deleted.`, "err")
+      return
+    }
   }
 
   btn.textContent = "Deleting…"
   try {
     await client.deleteNote(note.noteId)
   } catch (err) {
-    btn.disabled = false
-    btn.textContent = "Delete"
-    showBanner(`Failed to delete "${label}": ${err.message}`, "err")
+    restore()
+    showBanner(
+      `Failed to delete "${label}": ${err.message}` +
+      (bookmark ? ". The bookmark was still added to Firefox." : ""),
+      "err"
+    )
     return
   }
   row.style.opacity = "0.5"

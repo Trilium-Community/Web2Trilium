@@ -53,8 +53,9 @@ or load it temporarily for development:
   available as drop targets. They're hidden while a search filter is active.
 - **Trilium Links** lists every Trilium note with its own `#url` or
   `#webViewSrc` label (Trilium's built-in system notes are left out). Click a
-  row to open the link in Firefox, or Delete to remove the note from Trilium.
-  A note with child notes is never deleted from here: its Delete button is
+  row to open the link in Firefox, Delete to remove the note from Trilium, or
+  "Bookmark & delete" to add it to Firefox's Other Bookmarks and then remove
+  the note. A note with child notes is never deleted from here: its buttons are
   disabled, and the note is re-checked on the server right before deleting.
   The list reloads on Refresh or a profile change.
 - **Permissions**: `bookmarks`, `tabs`, `storage`, and localhost access.
