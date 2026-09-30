@@ -97,3 +97,15 @@ button:hover {
   background: #fdeaea;
   color: #a32020;
 }
+h2 {
+  font-size: 15px;
+  margin-top: 32px;
+}
+
+label.check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: normal;
+  margin-top: 10px;
+}

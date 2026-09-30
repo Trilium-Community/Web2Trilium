@@ -155,6 +155,25 @@ async function autoDetect() {
   }
 }
 
+async function renderConfirmations() {
+  const container = document.getElementById("confirmations")
+  const confirmations = await loadConfirmations()
+  CONFIRMATIONS.forEach(({ key, label }) => {
+    const row = document.createElement("label")
+    row.className = "check"
+    const cb = document.createElement("input")
+    cb.type = "checkbox"
+    cb.checked = confirmations[key] !== false
+    cb.addEventListener("change", async () => {
+      await setConfirmation(key, cb.checked)
+      showStatus(`Confirmation ${cb.checked ? "on" : "off"}: ${label}.`, true)
+    })
+    row.appendChild(cb)
+    row.appendChild(document.createTextNode(label))
+    container.appendChild(row)
+  })
+}
+
 els.profileSelect.addEventListener("change", switchProfile)
 document.getElementById("newProfile").addEventListener("click", newProfile)
 document.getElementById("renameProfile").addEventListener("click", renameProfile)
@@ -164,3 +183,4 @@ document.getElementById("testConn").addEventListener("click", testConnection)
 document.getElementById("autoDetect").addEventListener("click", autoDetect)
 
 load()
+renderConfirmations()

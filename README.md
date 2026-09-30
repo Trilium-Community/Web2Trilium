@@ -58,6 +58,8 @@ or load it temporarily for development:
   the note. A note with child notes is never deleted from here: its buttons are
   disabled, and the note is re-checked on the server right before deleting.
   The list reloads on Refresh or a profile change.
+- **Confirmations**: each confirmation prompt can be switched off under
+  Settings → Confirmations. The child-note block on Trilium deletes can't be.
 - **Permissions**: `bookmarks`, `tabs`, `storage`, and localhost access.
   The `tabs` permission is used only to read tab title/URL and close tabs.
 
@@ -81,4 +83,5 @@ Required repository secrets:
 - `trilium-api.js` — minimal ETAPI client
 - `manage.html` / `manage.js` — bookmark and tab browser + save actions
 - `options.html` / `options.js` — settings UI
+- `confirmations.js` — which confirmation prompts are switched on
 - `.github/workflows/publish.yml` — release automation

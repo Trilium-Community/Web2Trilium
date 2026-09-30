@@ -1028,7 +1028,8 @@ async function saveFolderAndRemove(node, btn, siblingBtn) {
     return
   }
 
-  const ok = window.confirm(
+  const ok = await confirmAction(
+    "saveFolder",
     `Save "${label}" and its ${total} bookmark${total === 1 ? "" : "s"} to Trilium, ` +
     `then remove the folder from Firefox?`
   )
@@ -1075,7 +1076,8 @@ async function deleteFolderOnly(node, btn, siblingBtn) {
 
   const total = countBookmarks(node)
   const label = node.title || "(unnamed folder)"
-  const ok = window.confirm(
+  const ok = await confirmAction(
+    "deleteFolder",
     `Delete the folder "${label}" and everything in it ` +
     `(${total} bookmark${total === 1 ? "" : "s"}) from Firefox without saving to Trilium?` +
     `\n\nThis can't be undone from this page.`
@@ -1135,7 +1137,8 @@ async function saveBookmarkAndRemove(node, btn, siblingBtn, row) {
 async function deleteBookmarkOnly(node, btn, siblingBtn, row) {
   clearBanner()
 
-  const ok = window.confirm(
+  const ok = await confirmAction(
+    "deleteBookmark",
     `Delete "${node.title || node.url}" from Firefox without saving it to Trilium?\n\nThis can't be undone from this page.`
   )
   if (!ok) return
@@ -1362,7 +1365,8 @@ async function deleteTriliumNote(note, url, btn, siblingBtn, row, { bookmark }) 
   }
 
   const clones = fresh.parentNoteIds.length
-  const ok = window.confirm(
+  const ok = await confirmAction(
+    bookmark ? "bookmarkAndDeleteTriliumNote" : "deleteTriliumNote",
     (bookmark
       ? `Bookmark "${label}" in Firefox, then delete the note from Trilium?`
       : `Delete the note "${label}" from Trilium?`) +
@@ -1493,7 +1497,8 @@ async function deleteSelection() {
   if (items.length === 0) return clearSelection()
 
   if (kind === "bookmarks") {
-    const ok = window.confirm(
+    const ok = await confirmAction(
+      "deleteSelectedBookmarks",
       `Delete ${items.length} bookmark${items.length === 1 ? "" : "s"} from Firefox ` +
       `without saving to Trilium?\n\nThis can't be undone from this page.`
     )
