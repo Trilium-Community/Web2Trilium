@@ -108,21 +108,23 @@ function createSvgFavicon() {
 // ---------------------------------------------------------------------------
 // Multi-select
 //
-// Bookmarks and tabs are selected independently — a batch operation only makes
-// sense within one kind, and "Delete" means different things to each. Selecting
+// Bookmarks, tabs and Trilium links are selected independently — a batch
+// operation only makes sense within one kind, and "Delete" means different
+// things to each. Selecting
 // in one section therefore clears the other. Selection is keyed by node/tab id
 // and rebuilt against the DOM after every re-render, so ids that vanished
 // (moved-away bookmarks, closed tabs) drop out on their own.
 // ---------------------------------------------------------------------------
 
-// "bookmarks" | "tabs" — which section the current selection belongs to.
+// "bookmarks" | "tabs" | "trilium" — which section the current selection belongs to.
 let selectionKind = null
 const selectedIds = new Set()
 
 // Last row clicked in each section, for shift-click ranges.
-const anchorId = { bookmarks: null, tabs: null }
+const anchorId = { bookmarks: null, tabs: null, trilium: null }
 
 function sectionRoot(kind) {
+  if (kind === "trilium") return triliumTreeEl
   return kind === "tabs" ? tabsTreeEl : treeEl
 }
 
@@ -174,7 +176,7 @@ function selectRange(kind, id) {
 // Single source of truth for checkbox state, row highlighting and the toolbar.
 // Called after selection changes and after every re-render.
 function syncSelectionUI() {
-  for (const kind of ["bookmarks", "tabs"]) {
+  for (const kind of ["bookmarks", "tabs", "trilium"]) {
     sectionRoot(kind).querySelectorAll(".bookmark-row").forEach((row) => {
       const on = selectionKind === kind && selectedIds.has(row.dataset.id)
       row.classList.toggle("selected", on)
@@ -190,9 +192,10 @@ function syncSelectionUI() {
     return
   }
   selectionBarEl.classList.add("visible")
-  const noun = selectionKind === "tabs" ? "tab" : "bookmark"
+  const noun = { tabs: "tab", bookmarks: "bookmark", trilium: "Trilium link" }[selectionKind]
   selectionCountEl.textContent = `${n} ${noun}${n === 1 ? "" : "s"} selected`
-  selSaveBtn.textContent = `Save ${n} to Inbox`
+  selSaveBtn.textContent =
+    selectionKind === "trilium" ? `Bookmark & delete ${n}` : `Save ${n} to Inbox`
   selDeleteBtn.textContent = selectionKind === "tabs" ? `Close ${n}` : `Delete ${n}`
   selSaveBtn.disabled = false
   selDeleteBtn.disabled = false
@@ -258,7 +261,7 @@ function makeRowCheckbox(kind, id) {
 // that follows every mutation.
 // ---------------------------------------------------------------------------
 
-const focusedId = { bookmarks: null, tabs: null }
+const focusedId = { bookmarks: null, tabs: null, trilium: null }
 
 function rowElement(kind, id) {
   return sectionRoot(kind).querySelector(
@@ -1238,8 +1241,12 @@ function noteUrl(note) {
 
 // Fetched on load, Refresh and profile change only, not on every bookmark or
 // tab event, so browsing doesn't hammer the server.
+// The links last drawn, by note id, so batch actions can find each row's URL.
+let triliumLinks = new Map()
+
 async function renderTriliumLinks() {
   triliumTreeEl.innerHTML = ""
+  triliumLinks = new Map()
   if (!client) {
     triliumTreeEl.innerHTML = `<div class="empty-state">Set up Trilium in Settings to list its links.</div>`
     return
@@ -1263,14 +1270,20 @@ async function renderTriliumLinks() {
     triliumTreeEl.innerHTML = `<div class="empty-state">No links in Trilium.</div>`
     return
   }
+  triliumLinks = new Map(links.map((l) => [l.note.noteId, l]))
   links.forEach((l) => triliumTreeEl.appendChild(makeTriliumRow(l.note, l.url)))
   applyFilter()
+  reconcileSelection()
+  syncRovingTabindex("trilium")
 }
 
 function makeTriliumRow(note, url) {
   const row = document.createElement("div")
   row.className = "bookmark-row"
   row.dataset.id = note.noteId
+  row.tabIndex = -1
+  row.setAttribute("role", "option")
+  row.appendChild(makeRowCheckbox("trilium", note.noteId))
 
   const link = document.createElement("div")
   link.className = "bm-link"
@@ -1397,8 +1410,12 @@ async function deleteTriliumNote(note, url, btn, siblingBtn, row, { bookmark }) 
     )
     return
   }
+  triliumLinks.delete(note.noteId)
   row.style.opacity = "0.5"
-  setTimeout(() => row.remove(), 300)
+  setTimeout(() => {
+    row.remove()
+    reconcileSelection()
+  }, 300)
 }
 
 // ---------------------------------------------------------------------------
@@ -1449,7 +1466,97 @@ async function removeSelectedItem(kind, id) {
   else await browser.bookmarks.remove(id)
 }
 
+// Checks every selected note first, so one confirmation covers the batch and
+// names what will be skipped. Notes with children, or that can't be checked,
+// are left alone.
+async function triliumSelectionAction({ bookmark }) {
+  clearBanner()
+  const ids = selectedNodeIds().filter((id) => !isSystemNote(id))
+  if (ids.length === 0) return clearSelection()
+
+  setBatchButtonsDisabled(true)
+  const eligible = []
+  const skipped = []
+  let cloned = 0
+  for (const id of ids) {
+    const link = triliumLinks.get(id)
+    const label = link ? link.note.title || id : id
+    selectionCountEl.textContent = `Checking ${eligible.length + skipped.length + 1} of ${ids.length}…`
+    try {
+      const fresh = await client.getNote(id)
+      if (!link || fresh.childNoteIds.length > 0) {
+        skipped.push(`${label} (has child notes)`)
+        continue
+      }
+      if (fresh.parentNoteIds.length > 1) cloned++
+      eligible.push(link)
+    } catch (err) {
+      skipped.push(`${label} (${err.message})`)
+    }
+  }
+
+  if (eligible.length === 0) {
+    setBatchButtonsDisabled(false)
+    syncSelectionUI()
+    showBanner(`Nothing deleted: ${skipped[0]}${skipped.length > 1 ? ` and ${skipped.length - 1} more` : ""}.`, "warn")
+    return
+  }
+
+  const n = eligible.length
+  const notes = `${n} note${n === 1 ? "" : "s"}`
+  const ok = await confirmAction(
+    bookmark ? "bookmarkAndDeleteSelectedTriliumNotes" : "deleteSelectedTriliumNotes",
+    (bookmark
+      ? `Bookmark ${n} link${n === 1 ? "" : "s"} in Firefox, then delete the ${notes} from Trilium?`
+      : `Delete ${notes} from Trilium?`) +
+    (skipped.length ? `\n\n${skipped.length} selected note${skipped.length === 1 ? " has" : "s have"} child notes or couldn't be checked, and will be left alone.` : "") +
+    (cloned ? `\n\n${cloned} of them appear${cloned === 1 ? "s" : ""} in more than one place in the tree; every copy will go.` : "")
+  )
+  if (!ok) {
+    setBatchButtonsDisabled(false)
+    syncSelectionUI()
+    return
+  }
+
+  let done = 0
+  const failures = []
+  for (const { note, url } of eligible) {
+    const label = note.title || note.noteId
+    selectionCountEl.textContent = `Deleting ${done + failures.length + 1} of ${n}…`
+    if (bookmark) {
+      try {
+        await browser.bookmarks.create({ title: note.title || url, url })
+      } catch (err) {
+        failures.push(`${label}: couldn't bookmark (${err.message})`)
+        continue
+      }
+    }
+    try {
+      await client.deleteNote(note.noteId)
+    } catch (err) {
+      failures.push(`${label}: ${err.message}${bookmark ? " (bookmark was still added)" : ""}`)
+      continue
+    }
+    done++
+    selectedIds.delete(note.noteId)
+    triliumLinks.delete(note.noteId)
+    rowElement("trilium", note.noteId)?.remove()
+  }
+
+  setBatchButtonsDisabled(false)
+  if (bookmark) await refreshAll()
+  else reconcileSelection()
+
+  const problems = failures.concat(skipped)
+  if (problems.length) {
+    showBanner(`Deleted ${done} of ${ids.length}. Not deleted: ${problems[0]}${problems.length > 1 ? ` and ${problems.length - 1} more` : ""}.`, "err")
+  } else {
+    showBanner(`Deleted ${done} note${done === 1 ? "" : "s"} from Trilium${bookmark ? " and bookmarked them in Firefox" : ""}.`, "ok")
+  }
+}
+
 async function saveSelection() {
+  if (selectionKind === "trilium") return triliumSelectionAction({ bookmark: true })
   clearBanner()
   const kind = selectionKind
   const items = await resolveSelection()
@@ -1491,6 +1598,7 @@ async function saveSelection() {
 }
 
 async function deleteSelection() {
+  if (selectionKind === "trilium") return triliumSelectionAction({ bookmark: false })
   clearBanner()
   const kind = selectionKind
   const items = await resolveSelection()
@@ -1579,6 +1687,7 @@ async function refreshAll() {
   // Rows were all replaced; re-establish the single tab stop per section.
   syncRovingTabindex("bookmarks")
   syncRovingTabindex("tabs")
+  syncRovingTabindex("trilium")
 
   // Restore after layout settles; a tree that got shorter clamps the offset to
   // the new maximum on its own.
@@ -1697,6 +1806,7 @@ searchEl.addEventListener("input", () => {
   applyFilter()
   syncRovingTabindex("bookmarks")
   syncRovingTabindex("tabs")
+  syncRovingTabindex("trilium")
 });
 
 (async function init() {
@@ -1707,6 +1817,7 @@ searchEl.addEventListener("input", () => {
   setupSection("triliumSection", triliumTreeEl, "trilium")
   installKeyboardNav("bookmarks")
   installKeyboardNav("tabs")
+  installKeyboardNav("trilium")
   checkSetup()
   await refreshAll()
   await renderTriliumLinks()

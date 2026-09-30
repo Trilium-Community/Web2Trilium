@@ -9,7 +9,9 @@ const CONFIRMATIONS = [
   { key: "deleteBookmark", label: "Deleting a bookmark from Firefox" },
   { key: "deleteSelectedBookmarks", label: "Deleting selected bookmarks from Firefox" },
   { key: "deleteTriliumNote", label: "Deleting a note from Trilium" },
-  { key: "bookmarkAndDeleteTriliumNote", label: "Bookmarking a Trilium link and deleting its note" }
+  { key: "bookmarkAndDeleteTriliumNote", label: "Bookmarking a Trilium link and deleting its note" },
+  { key: "deleteSelectedTriliumNotes", label: "Deleting selected notes from Trilium" },
+  { key: "bookmarkAndDeleteSelectedTriliumNotes", label: "Bookmarking selected Trilium links and deleting their notes" }
 ]
 
 async function loadConfirmations() {

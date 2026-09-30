@@ -57,7 +57,9 @@ or load it temporarily for development:
   "Bookmark & delete" to add it to Firefox's Other Bookmarks and then remove
   the note. A note with child notes is never deleted from here: its buttons are
   disabled, and the note is re-checked on the server right before deleting.
-  The list reloads on Refresh or a profile change.
+  Links can be multi-selected like bookmarks and tabs, then bookmarked and
+  deleted, or deleted, together; selected notes with children are skipped. The
+  list reloads on Refresh or a profile change.
 - **Confirmations**: each confirmation prompt can be switched off under
   Settings → Confirmations. The child-note block on Trilium deletes can't be.
 - **Permissions**: `bookmarks`, `tabs`, `storage`, and localhost access.
