@@ -49,6 +49,23 @@ class TriliumClient {
     })
   }
 
+  async getNote(noteId) {
+    return this.request("GET", `/etapi/notes/${encodeURIComponent(noteId)}`)
+  }
+
+  // Deletes every clone of the note, and any child whose only parent it is.
+  async deleteNote(noteId) {
+    return this.request("DELETE", `/etapi/notes/${encodeURIComponent(noteId)}`)
+  }
+
+  async searchNotes(query) {
+    const result = await this.request(
+      "GET",
+      `/etapi/notes?search=${encodeURIComponent(query)}&includeArchivedNotes=true`
+    )
+    return result.results || []
+  }
+
   async findNoteByLabel(labelName) {
     const result = await this.request(
       "GET",

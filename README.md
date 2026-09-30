@@ -51,6 +51,12 @@ or load it temporarily for development:
   Firefox via `browser.bookmarks.move()`. Open tabs are not draggable.
 - **Empty folders** stay in the list rather than disappearing, so they remain
   available as drop targets. They're hidden while a search filter is active.
+- **Trilium Links** lists every Trilium note with its own `#url` or
+  `#webViewSrc` label (Trilium's built-in system notes are left out). Click a
+  row to open the link in Firefox, or Delete to remove the note from Trilium.
+  A note with child notes is never deleted from here: its Delete button is
+  disabled, and the note is re-checked on the server right before deleting.
+  The list reloads on Refresh or a profile change.
 - **Permissions**: `bookmarks`, `tabs`, `storage`, and localhost access.
   The `tabs` permission is used only to read tab title/URL and close tabs.
 

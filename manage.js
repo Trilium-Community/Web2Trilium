@@ -7,6 +7,7 @@ let profileList = []
 
 const treeEl = document.getElementById("tree")
 const tabsTreeEl = document.getElementById("tabsTree")
+const triliumTreeEl = document.getElementById("triliumTree")
 const searchEl = document.getElementById("search")
 const bannerEl = document.getElementById("banner")
 const profileSelectEl = document.getElementById("profileSelect")
@@ -894,11 +895,13 @@ function applyFilter() {
   const rows = treeEl.querySelectorAll(".bookmark-row")
   const folders = treeEl.querySelectorAll(".folder")
   const tabRows = tabsTreeEl.querySelectorAll(".bookmark-row")
+  const triliumRows = triliumTreeEl.querySelectorAll(".bookmark-row")
 
   if (!q) {
     rows.forEach((r) => (r.style.display = ""))
     folders.forEach((f) => (f.style.display = ""))
     tabRows.forEach((r) => (r.style.display = ""))
+    triliumRows.forEach((r) => (r.style.display = ""))
     return
   }
 
@@ -913,6 +916,7 @@ function applyFilter() {
 
   rows.forEach((r) => (r.style.display = matches(r) ? "" : "none"))
   tabRows.forEach((r) => (r.style.display = matches(r) ? "" : "none"))
+  triliumRows.forEach((r) => (r.style.display = matches(r) ? "" : "none"))
 
   // Hide folders with no visible bookmark rows
   folders.forEach((folder) => {
@@ -1206,6 +1210,157 @@ async function closeTabOnly(tab, btn, siblingBtn, row) {
 }
 
 // ---------------------------------------------------------------------------
+// Trilium links
+//
+// Lists every note in Trilium that carries its own #url or #webViewSrc label,
+// except Trilium's own system notes (ids starting "_", such as the built-in help).
+// Clicking a row opens the URL in Firefox; Delete removes the note from
+// Trilium. ETAPI's delete also takes any child whose only parent is that note,
+// so a note with children is never deleted from here, and that is re-checked
+// against the server just before the delete is sent.
+// ---------------------------------------------------------------------------
+
+function isSystemNote(noteId) {
+  return noteId.startsWith("_")
+}
+
+// The note's own URL label, ignoring any inherited from an ancestor.
+function noteUrl(note) {
+  const own = (name) =>
+    note.attributes.find((a) => a.noteId === note.noteId && a.type === "label" && a.name === name)
+  const attr = own("url") || own("webViewSrc")
+  return attr ? attr.value : ""
+}
+
+// Fetched on load, Refresh and profile change only, not on every bookmark or
+// tab event, so browsing doesn't hammer the server.
+async function renderTriliumLinks() {
+  triliumTreeEl.innerHTML = ""
+  if (!client) {
+    triliumTreeEl.innerHTML = `<div class="empty-state">Set up Trilium in Settings to list its links.</div>`
+    return
+  }
+
+  let notes
+  try {
+    notes = await client.searchNotes("#url or #webViewSrc")
+  } catch (err) {
+    triliumTreeEl.innerHTML = `<div class="empty-state"></div>`
+    triliumTreeEl.firstChild.textContent = `Couldn't load links from Trilium: ${err.message}`
+    return
+  }
+
+  const links = notes
+    .map((note) => ({ note, url: noteUrl(note) }))
+    .filter((l) => l.url && !isSystemNote(l.note.noteId))
+    .sort((a, b) => a.note.title.localeCompare(b.note.title))
+
+  if (links.length === 0) {
+    triliumTreeEl.innerHTML = `<div class="empty-state">No links in Trilium.</div>`
+    return
+  }
+  links.forEach((l) => triliumTreeEl.appendChild(makeTriliumRow(l.note, l.url)))
+  applyFilter()
+}
+
+function makeTriliumRow(note, url) {
+  const row = document.createElement("div")
+  row.className = "bookmark-row"
+  row.dataset.id = note.noteId
+
+  const link = document.createElement("div")
+  link.className = "bm-link"
+  link.title = url
+  link.addEventListener("click", () => browser.tabs.create({ url }))
+
+  const text = document.createElement("div")
+  text.className = "bm-text"
+  const titleEl = document.createElement("div")
+  titleEl.className = "bm-title"
+  titleEl.textContent = note.title || url
+  const urlEl = document.createElement("div")
+  urlEl.className = "bm-url"
+  urlEl.textContent = url
+  text.appendChild(titleEl)
+  text.appendChild(urlEl)
+
+  link.appendChild(createSvgFavicon())
+  link.appendChild(text)
+
+  const actions = document.createElement("div")
+  actions.className = "bm-actions"
+
+  const deleteBtn = document.createElement("button")
+  deleteBtn.className = "delete-btn"
+  deleteBtn.textContent = "Delete"
+  if (note.childNoteIds.length > 0) {
+    deleteBtn.disabled = true
+    deleteBtn.title = "This note has child notes, so it can't be deleted from here"
+  } else {
+    deleteBtn.title = "Delete this note from Trilium"
+  }
+  deleteBtn.addEventListener("click", () => deleteTriliumNote(note, deleteBtn, row))
+
+  actions.appendChild(deleteBtn)
+  row.appendChild(link)
+  row.appendChild(actions)
+  return row
+}
+
+async function deleteTriliumNote(note, btn, row) {
+  clearBanner()
+  const label = note.title || note.noteId
+  if (isSystemNote(note.noteId)) return
+
+  btn.disabled = true
+  btn.textContent = "Checking…"
+
+  // Children may have been added since the list was drawn.
+  let fresh
+  try {
+    fresh = await client.getNote(note.noteId)
+  } catch (err) {
+    btn.disabled = false
+    btn.textContent = "Delete"
+    showBanner(`Couldn't check "${label}" before deleting: ${err.message}`, "err")
+    return
+  }
+  if (fresh.childNoteIds.length > 0) {
+    btn.textContent = "Delete"
+    btn.title = "This note has child notes, so it can't be deleted from here"
+    showBanner(
+      `Not deleted: "${label}" has ${fresh.childNoteIds.length} child ` +
+      `note${fresh.childNoteIds.length === 1 ? "" : "s"}. Move or delete them in Trilium first.`,
+      "warn"
+    )
+    return
+  }
+
+  const clones = fresh.parentNoteIds.length
+  const ok = window.confirm(
+    `Delete the note "${label}" from Trilium?` +
+    (clones > 1 ? `\n\nIt appears in ${clones} places in the tree; all of them will go.` : "")
+  )
+  if (!ok) {
+    btn.disabled = false
+    btn.textContent = "Delete"
+    return
+  }
+
+  btn.textContent = "Deleting…"
+  try {
+    await client.deleteNote(note.noteId)
+  } catch (err) {
+    btn.disabled = false
+    btn.textContent = "Delete"
+    showBanner(`Failed to delete "${label}": ${err.message}`, "err")
+    return
+  }
+  row.style.opacity = "0.5"
+  setTimeout(() => row.remove(), 300)
+}
+
+// ---------------------------------------------------------------------------
 // Batch actions on the current selection
 //
 // Saves run one at a time rather than in parallel: Trilium's ETAPI is a single
@@ -1393,6 +1548,7 @@ document.getElementById("refresh").addEventListener("click", async () => {
   await loadConfig()
   checkSetup()
   await refreshAll()
+  await renderTriliumLinks()
 })
 
 // ---------------------------------------------------------------------------
@@ -1458,7 +1614,7 @@ let selfWrite = false
 browser.storage.onChanged.addListener((changes, area) => {
   if (area !== "local" || selfWrite) return
   if (!changes.profiles && !changes.activeProfileId) return
-  loadConfig().then(checkSetup)
+  loadConfig().then(checkSetup).then(renderTriliumLinks)
 })
 
 profileSelectEl.addEventListener("change", async () => {
@@ -1469,6 +1625,7 @@ profileSelectEl.addEventListener("change", async () => {
     if (!checkSetup()) {
       showBanner(`Saving to profile "${config.name}".`, "ok")
     }
+    await renderTriliumLinks()
   } finally {
     selfWrite = false
   }
@@ -1505,8 +1662,10 @@ searchEl.addEventListener("input", () => {
   await loadSectionState()
   setupSection("tabsSection", tabsTreeEl, "tabs")
   setupSection("bookmarksSection", treeEl, "bookmarks")
+  setupSection("triliumSection", triliumTreeEl, "trilium")
   installKeyboardNav("bookmarks")
   installKeyboardNav("tabs")
   checkSetup()
   await refreshAll()
+  await renderTriliumLinks()
 })()
