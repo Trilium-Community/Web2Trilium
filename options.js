@@ -118,7 +118,11 @@ async function deleteProfile() {
   }
 
   const p = currentProfile()
-  if (!window.confirm(`Delete profile "${p.name}"?\n\nIts server URL, token, and inbox note ID will be removed.`)) {
+  const ok = await confirmAction(
+    "deleteProfile",
+    `Delete profile "${p.name}"?\n\nIts server URL, token, and inbox note ID will be removed.`
+  )
+  if (!ok) {
     return
   }
 

@@ -1,5 +1,5 @@
 // confirmations.js
-// Which confirmation prompts the Web2Trilium page shows. Every prompt is on by
+// Which confirmation prompts the Web2Trilium page and Settings show. Every prompt is on by
 // default; storage holds only the ones switched off, as
 //   confirmations: { [key]: false }
 
@@ -11,7 +11,8 @@ const CONFIRMATIONS = [
   { key: "deleteTriliumNote", label: "Deleting a note from Trilium" },
   { key: "bookmarkAndDeleteTriliumNote", label: "Bookmarking a Trilium link and deleting its note" },
   { key: "deleteSelectedTriliumNotes", label: "Deleting selected notes from Trilium" },
-  { key: "bookmarkAndDeleteSelectedTriliumNotes", label: "Bookmarking selected Trilium links and deleting their notes" }
+  { key: "bookmarkAndDeleteSelectedTriliumNotes", label: "Bookmarking selected Trilium links and deleting their notes" },
+  { key: "deleteProfile", label: "Deleting a profile in Settings" }
 ]
 
 async function loadConfirmations() {
