@@ -60,9 +60,19 @@ or load it temporarily for development:
   Links can be multi-selected like bookmarks and tabs, then bookmarked and
   deleted, or deleted, together; selected notes with children are skipped. The
   list reloads on Refresh or a profile change.
+- **Folder sync** (Settings → Folder sync) keeps chosen bookmark folders
+  mirrored in Trilium, one way. Each folder becomes a note under the note you
+  pick, its text the folder's bookmarks as links, with a child note for each
+  folder inside it, in Firefox's order. It syncs a few seconds after any
+  bookmark change, at startup, every 30 minutes, and on **Sync now**. The notes
+  carry a `#web2triliumFolder` label naming their folder, and only labelled
+  notes are ever changed: they are renamed, rewritten, moved and reordered to
+  match Firefox, and deleted when their folder is deleted or no longer ticked.
+  Edit those bookmarks in Firefox; edits made to the notes are overwritten.
 - **Confirmations**: each confirmation prompt can be switched off under
   Settings → Confirmations. The child-note block on Trilium deletes can't be.
-- **Permissions**: `bookmarks`, `tabs`, `storage`, and localhost access.
+- **Permissions**: `bookmarks`, `tabs`, `storage`, `alarms` (the 30-minute
+  folder sync), and localhost access.
   The `tabs` permission is used only to read tab title/URL and close tabs.
 
 ## Publishing
@@ -81,9 +91,13 @@ Required repository secrets:
 ## Files
 
 - `manifest.json` — extension manifest (Manifest V2, Firefox)
-- `background.js` — handles toolbar icon click
+- `background.js` — handles toolbar icon click, and runs folder sync
+- `folder-sync.js` — mirrors chosen bookmark folders into Trilium
+- `folder-sync-options.js` — the Folder sync section of Settings
+- `test/` — tests for folder sync, run with `npm test`
 - `trilium-api.js` — minimal ETAPI client
 - `manage.html` / `manage.js` — bookmark and tab browser + save actions
 - `options.html` / `options.js` — settings UI
 - `confirmations.js` — which confirmation prompts are switched on
 - `.github/workflows/publish.yml` — release automation
+- `.github/workflows/tests.yml` — runs the tests and `web-ext lint` on every push and pull request

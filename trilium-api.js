@@ -8,19 +8,26 @@ class TriliumClient {
     this.token = token
   }
 
-  async request(method, path, body) {
+  async send(method, path, body, contentType = "application/json") {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": contentType,
         Authorization: this.token
       },
-      body: body ? JSON.stringify(body) : undefined
+      body
     })
     if (!res.ok) {
       const text = await res.text().catch(() => "")
-      throw new Error(`Trilium API ${method} ${path} failed: ${res.status} ${text}`)
+      const error = new Error(`Trilium API ${method} ${path} failed: ${res.status} ${text}`)
+      error.status = res.status
+      throw error
     }
+    return res
+  }
+
+  async request(method, path, body) {
+    const res = await this.send(method, path, body ? JSON.stringify(body) : undefined)
     if (res.status === 204) return null
     return res.json()
   }
@@ -29,14 +36,49 @@ class TriliumClient {
     return this.request("GET", "/etapi/app-info")
   }
 
-  async createNote({ parentNoteId, title, type = "text", content = "", mime }) {
+  async createNote({ parentNoteId, title, type = "text", content = "", mime, notePosition }) {
     return this.request("POST", "/etapi/create-note", {
       parentNoteId,
       title,
       type,
       content,
       mime,
+      notePosition
     })
+  }
+
+  async patchNote(noteId, fields) {
+    return this.request("PATCH", `/etapi/notes/${encodeURIComponent(noteId)}`, fields)
+  }
+
+  async getNoteContent(noteId) {
+    const res = await this.send("GET", `/etapi/notes/${encodeURIComponent(noteId)}/content`)
+    return res.text()
+  }
+
+  async putNoteContent(noteId, content) {
+    await this.send("PUT", `/etapi/notes/${encodeURIComponent(noteId)}/content`, content, "text/plain")
+  }
+
+  async getBranch(branchId) {
+    return this.request("GET", `/etapi/branches/${encodeURIComponent(branchId)}`)
+  }
+
+  async createBranch({ noteId, parentNoteId, notePosition }) {
+    return this.request("POST", "/etapi/branches", { noteId, parentNoteId, notePosition })
+  }
+
+  async patchBranch(branchId, fields) {
+    return this.request("PATCH", `/etapi/branches/${encodeURIComponent(branchId)}`, fields)
+  }
+
+  // Pushes changed note positions under a parent to the open Trilium windows.
+  async refreshNoteOrdering(parentNoteId) {
+    return this.request("POST", `/etapi/refresh-note-ordering/${encodeURIComponent(parentNoteId)}`)
+  }
+
+  async deleteBranch(branchId) {
+    return this.request("DELETE", `/etapi/branches/${encodeURIComponent(branchId)}`)
   }
 
   async createAttribute({ noteId, type, name, value, isInheritable = false }) {

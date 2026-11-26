@@ -46,6 +46,27 @@
 
   <div id="status"></div>
 
+  <h2>Folder sync</h2>
+  <div class="hint">
+    Keeps the folders ticked below mirrored in Trilium, one note per folder holding its
+    bookmarks as links, with a child note for each folder inside it. Firefox is the source:
+    the notes are rewritten whenever the folders change, so edit bookmarks in Firefox, not
+    those notes. Uses the profile selected above when you save.
+  </div>
+  <label class="check"><input type="checkbox" id="folderSyncEnabled" />Keep these folders synced to Trilium</label>
+
+  <label for="folderSyncParent">Sync into note ID</label>
+  <input type="text" id="folderSyncParent" placeholder="e.g. a1b2c3d4..." />
+  <div class="hint">The Trilium note the folders' notes go under. Right-click it in Trilium → "Copy note ID to clipboard".</div>
+
+  <label>Folders</label>
+  <div id="folderSyncFolders" class="folder-list"></div>
+  <div class="hint">A folder brings every folder inside it.</div>
+
+  <button id="folderSyncSave">Save folder sync</button>
+  <button id="folderSyncNow" class="secondary">Sync now</button>
+  <div id="folderSyncStatus" class="hint"></div>
+
   <h2>Confirmations</h2>
   <div class="hint">
     Ask before each of these actions. These apply to every profile and save as soon as you
@@ -57,6 +78,7 @@
   <script src="profiles.js"></script>
   <script src="confirmations.js"></script>
   <script src="options.js"></script>
+  <script src="folder-sync-options.js"></script>
 </body>
 
 </html>
