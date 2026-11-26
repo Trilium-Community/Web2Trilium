@@ -1,0 +1,7 @@
+{
+  "name": "web2trilium",
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
+}
